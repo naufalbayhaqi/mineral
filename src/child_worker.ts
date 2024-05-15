@@ -34,7 +34,7 @@ if (isMainThread) {
         } = event;
         let nonce = BigInt(startNonce);
         let nonceCount = 0; // 全局计数器，用于跟踪处理的nonce数量
-        while (nonceCount < bulkSize) {
+        while (nonceCount < nonceRange) {
             nonceCount++;
             const hash = createHash(currentHash, signerBytes, nonce);
             const isValid = validateHash(hash, difficulty);
