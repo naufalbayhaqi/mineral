@@ -273,6 +273,7 @@ export async function runner(
                             signerBytes,
                             difficulty,
                             jobId,
+                            nonceRange,
                         });
                         worker.on('message', (msg: any) => {
                             if (
@@ -298,6 +299,7 @@ export async function runner(
                                     signerBytes,
                                     difficulty,
                                     jobId,
+                                    nonceRange
                                 });
                             }
                         });

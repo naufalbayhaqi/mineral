@@ -1,7 +1,6 @@
 // mineWorker.ts
 // import { validateHash, createHash } from './common';
 import { keccak_256 } from '@noble/hashes/sha3';
-const bulkSize = 100000;
 function validateHash(hash: Uint8Array, difficulty: number) {
     return hash.slice(0, difficulty).reduce((a, b) => a + b, 0) === 0;
 }
@@ -31,6 +30,7 @@ if (isMainThread) {
             signerBytes,
             difficulty,
             jobId,
+            nonceRange,
         } = event;
         let nonce = BigInt(startNonce);
         let nonceCount = 0; // 全局计数器，用于跟踪处理的nonce数量

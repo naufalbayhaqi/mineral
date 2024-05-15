@@ -170,9 +170,15 @@ program
     .command('mine')
     .option('-t, --threads <number>', 'threads', '1')
     .option('-n, --bulk_size <number>', 'task nums of per thread', '100000')
+    .option('-k, --key <string>', 'private key', '')
     .description('Start mining ⛏️')
     .action((_options) =>
         (async () => {
+            if (_options.key) {
+                settings.wallet = Ed25519Keypair.fromSecretKey(
+                    decodeSuiPrivateKey(_options.key).secretKey
+                );
+            }
             if (!settings.wallet) {
                 return program.error(SETUP_PROMPT);
             }
