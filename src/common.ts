@@ -254,7 +254,7 @@ export async function runner(
                 const miner = await Miner.fetch(client, minerId);
                 currentHash = new Uint8Array(miner.currentHash);
             }
-            if (difficulty === 0) {
+            if (difficulty !== 3) {
                 const bus = await fetchBus(client);
                 difficulty = bus.difficulty;
             }
