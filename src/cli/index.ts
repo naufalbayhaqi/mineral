@@ -207,7 +207,7 @@ program
                 settings.wallet,
                 settings.rpc
             );
-            const bus = await fetchBus(settings.rpc);
+            // const bus = await fetchBus(settings.rpc);
 
             if (!minerAccount) {
                 return program.error('Miner account not created!');
@@ -217,7 +217,7 @@ program
             }
             runner(
                 settings.rpc,
-                bus.difficulty,
+                // bus.difficulty,
                 settings.wallet,
                 minerAccount,
                 _options.threads,

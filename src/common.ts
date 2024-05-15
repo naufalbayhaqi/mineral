@@ -224,7 +224,6 @@ function createWorker(id: number) {
 
 export async function runner(
     client: SuiClient,
-    difficulty: number,
     wallet: Ed25519Keypair,
     minerId: string,
     threads: number = 1,
@@ -238,6 +237,8 @@ export async function runner(
 
     let currentHash: Uint8Array | null = null;
     let nonce = BigInt(0);
+    let difficulty: number = 0;
+
     log('⛏️  Mining started');
     log('🔍 Looking for a valid proof...');
     const workerPoolSize = threads;
