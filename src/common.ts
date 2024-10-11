@@ -1,6 +1,6 @@
 /* eslint-disable fp/no-loops, fp/no-mutation, fp/no-mutating-methods, fp/no-let, no-constant-condition */
 
-import { keccak_256 } from '@noble/hashes/sha3';
+import { keccak } from 'hash-wasm';
 import { mine, epochReset } from './codegen/mineral/mine/functions';
 import { register } from './codegen/mineral/miner/functions';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui.js/utils';
@@ -171,23 +171,24 @@ export async function buildMineTx(
     return txb;
 }
 
-export function fakeProof(nonce: bigint): Uint8Array {
+export async function fakeProof(nonce: bigint): Promise<Uint8Array> {
     const dataToHash = new Uint8Array(32 + 32 + 8);
     dataToHash.set(int64to8(nonce), 64);
-    const bts = keccak_256(dataToHash);
-    return new Uint8Array(bts);
+    const bts = await keccak(dataToHash, 256);
+    return hexToBytes(bts);
 }
 
-export function createHash(
+export async function createHash(
     currentHash: Uint8Array,
     signerAddressBytes: Uint8Array,
     nonce: bigint
-): Uint8Array {
+): Promise<Uint8Array> {
     const dataToHash = new Uint8Array(32 + 32 + 8);
     dataToHash.set(currentHash, 0);
     dataToHash.set(signerAddressBytes, 32);
     dataToHash.set(int64to8(nonce), 64);
-    return keccak_256(dataToHash);
+    const bts = await keccak(dataToHash, 256);
+    return hexToBytes(bts);
 }
 
 export function validateHash(hash: Uint8Array, difficulty: number) {
@@ -590,3 +591,10 @@ export function formatBig(n: bigint, decimals: number) {
         trimMantissa: true,
     });
 }
+
+export function hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let c = 0, i = 0; c < hex.length; c += 2, i++)
+      bytes[i] = parseInt(hex.slice(c, c + 2), 16);
+    return bytes;
+  }
