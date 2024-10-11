@@ -158,8 +158,11 @@ export async function buildMineTx(
         bus: txb.sharedObjectRef({
             objectId: bus.id,
             mutable: true,
-            initialSharedVersion: shared
-        });
+            initialSharedVersion: shared,
+        }),
+        clock: SUI_CLOCK_OBJECT_ID,
+        miner: minerId,
+    });
         txb.transferObjects([createdObj], payer);
         return txb;
     }
