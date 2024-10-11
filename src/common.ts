@@ -39,14 +39,11 @@ export type MineEvent =
     | 'submitting'
     | 'waiting';
 
-// Use typescript-eslint or varsIgnorePattern
-/* eslint-disable no-unused-vars */
 enum BusStatus {
     MineOk,
     RewardsExhausted,
     ResetNeeded,
 }
-/* eslint-enable no-unused-vars */
 
 export const getClient = () => {
     return new SuiClient({
@@ -59,7 +56,7 @@ export function fetchBus(client: SuiClient) {
 }
 
 function roll20(): boolean {
-  return Math.floor(Math.random() * 20) === 0;
+    return Math.floor(Math.random() * 20) === 0;
 }
 
 export async function findBus(
@@ -74,9 +71,8 @@ export async function findBus(
         return bus;
     });
 
-    // Put buses with most rewards to the start
-    buses.sort((a, b) => Number(a.rewards.value - b.rewards.value));
-    buses.reverse();
+    // Sort buses by rewards in descending order
+    buses.sort((a, b) => Number(b.rewards.value - a.rewards.value));
 
     const busWithRewards = buses.find(
         (bus) => bus.rewards.value >= bus.rewardRate
@@ -162,439 +158,443 @@ export async function buildMineTx(
         bus: txb.sharedObjectRef({
             objectId: bus.id,
             mutable: true,
-            initialSharedVersion: shared,
-        }),
-        clock: SUI_CLOCK_OBJECT_ID,
-        miner: minerId,
-    });
-    txb.transferObjects([createdObj], payer);
-    return txb;
-}
-
-export async function fakeProof(nonce: bigint): Promise<Uint8Array> {
-    const dataToHash = new Uint8Array(32 + 32 + 8);
-    dataToHash.set(int64to8(nonce), 64);
-    const bts = await keccak(dataToHash, 256);
-    return hexToBytes(bts);
-}
-
-export async function createHash(
-    currentHash: Uint8Array,
-    signerAddressBytes: Uint8Array,
-    nonce: bigint
-): Promise<Uint8Array> {
-    const dataToHash = new Uint8Array(32 + 32 + 8);
-    dataToHash.set(currentHash, 0);
-    dataToHash.set(signerAddressBytes, 32);
-    dataToHash.set(int64to8(nonce), 64);
-    const bts = await keccak(dataToHash, 256);
-    return hexToBytes(bts);
-}
-
-export function validateHash(hash: Uint8Array, difficulty: number) {
-    return hash.slice(0, difficulty).reduce((a, b) => a + b, 0) === 0;
-}
-
-export function int64to8(n: bigint) {
-    const arr = BigUint64Array.of(n);
-    return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
-}
-
-export async function getProof(
-    client: SuiClient,
-    address: string
-): Promise<string | null> {
-    const res = await client.getOwnedObjects({
-        owner: address,
-        filter: { StructType: Miner.$typeName },
-    });
-    const [miner] = res.data;
-    return miner && miner.data ? miner.data.objectId : null;
-}
-// 子进程计算
-import { Worker, isMainThread, parentPort } from 'node:worker_threads';
-// 假设mineWorker.ts位于同一目录下
-const workerPath = './child_worker.js';
-
-function createWorker(id: number) {
-    const worker = new Worker(workerPath);
-    return worker;
-}
-
-export async function runner(
-    client: SuiClient,
-    difficulty: number,
-    wallet: Ed25519Keypair,
-    minerId: string,
-    threads: number = 1,
-    bulkSize: number = 100000,
-    logger?: (_val: string) => void
-) {
-    const log = (val: string) => (logger ? logger(val) : null);
-    const tag = wallet.toSuiAddress().slice(0, 8);
-
-    const signerBytes = bcs.Address.serialize(wallet.toSuiAddress()).toBytes();
-
-    let currentHash: Uint8Array | null = null;
-    let nonce = BigInt(0);
-    log('⛏️  Mining started');
-    log('🔍 Looking for a valid proof...');
-    const workerPoolSize = threads;
-    let nonceBase = 0;
-    let nonceRange = bulkSize;
-    let jobId = 0;
-    difficulty = 0;
-    while (true) {
-        await (async () => {
-            const workers = Array.from({ length: workerPoolSize }, (_, i) =>
-                createWorker(i)
-            );
-            if (!currentHash) {
-                const miner = await Miner.fetch(client, minerId);
-                currentHash = new Uint8Array(miner.currentHash);
-            }
-            if (difficulty === 0) {
-                const bus = await fetchBus(client);
-                difficulty = bus.difficulty;
-            }
-            let resolved = false;
-            async function findByParallel(
-                workers: any,
-                currentHash: Uint8Array | null = null,
-                signerBytes: any,
-                difficulty: number
-            ) {
-                nonce = BigInt(nonceBase + (workers.length + 1) * nonceRange);
-                return new Promise((resolve) => {
-                    for (let i = 0; i < workers.length; i++) {
-                        const worker = workers[i];
-                        worker.postMessage({
-                            startNonce: BigInt(i * nonceRange + 1 + nonceBase),
-                            currentHash,
-                            signerBytes,
-                            difficulty,
-                            jobId,
-                            nonceRange,
-                        });
-                        worker.on('message', (msg: any) => {
-                            if (
-                                msg.isValid &&
-                                !resolved &&
-                                msg.jobId === jobId
-                            ) {
-                                log(
-                                    `🎉 Found a valid proof! Nonce: ${msg.nonce}`
-                                );
-                                resolved = true;
-                                jobId++;
-                                for (let j = 0; j < workers.length; j++) {
-                                    workers[j].terminate();
+            initialSharedVersion: shared
+        });
+        txb.transferObjects([createdObj], payer);
+        return txb;
+    }
+    
+    export async function fakeProof(nonce: bigint): Promise<Uint8Array> {
+        const dataToHash = new Uint8Array(32 + 32 + 8);
+        dataToHash.set(int64to8(nonce), 64);
+        const bts = await keccak(dataToHash, 256);
+        return hexToBytes(bts);
+    }
+    
+    export async function createHash(
+        currentHash: Uint8Array,
+        signerAddressBytes: Uint8Array,
+        nonce: bigint
+    ): Promise<Uint8Array> {
+        const dataToHash = new Uint8Array(32 + 32 + 8);
+        dataToHash.set(currentHash, 0);
+        dataToHash.set(signerAddressBytes, 32);
+        dataToHash.set(int64to8(nonce), 64);
+        const bts = await keccak(dataToHash, 256);
+        return hexToBytes(bts);
+    }
+    
+    export function validateHash(hash: Uint8Array, difficulty: number) {
+        return hash.slice(0, difficulty).reduce((a, b) => a + b, 0) === 0;
+    }
+    
+    export function int64to8(n: bigint) {
+        const arr = BigUint64Array.of(n);
+        return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+    }
+    
+    export async function getProof(
+        client: SuiClient,
+        address: string
+    ): Promise<string | null> {
+        const res = await client.getOwnedObjects({
+            owner: address,
+            filter: { StructType: Miner.$typeName },
+        });
+        const [miner] = res.data;
+        return miner && miner.data ? miner.data.objectId : null;
+    }
+    
+    import { Worker, isMainThread, parentPort } from 'node:worker_threads';
+    const workerPath = './child_worker.js';
+    
+    function createWorker(id: number) {
+        const worker = new Worker(workerPath);
+        return worker;
+    }
+    
+    export async function runner(
+        client: SuiClient,
+        difficulty: number,
+        wallet: Ed25519Keypair,
+        minerId: string,
+        threads: number = 1,
+        bulkSize: number = 100000,
+        logger?: (_val: string) => void
+    ) {
+        const log = (val: string) => (logger ? logger(val) : null);
+        const tag = wallet.toSuiAddress().slice(0, 8);
+    
+        const signerBytes = bcs.Address.serialize(wallet.toSuiAddress()).toBytes();
+    
+        let currentHash: Uint8Array | null = null;
+        let nonce = BigInt(0);
+        log('⛏️  Mining started');
+        log('🔍 Looking for a valid proof...');
+    
+        const workerPoolSize = threads;
+        let nonceBase = 0;
+        let nonceRange = bulkSize;
+        let jobId = 0;
+        difficulty = 0; // Reset difficulty to 0 initially
+    
+        while (true) {
+            await (async () => {
+                const workers = Array.from({ length: workerPoolSize }, (_, i) =>
+                    createWorker(i)
+                );
+    
+                if (!currentHash) {
+                    const miner = await Miner.fetch(client, minerId);
+                    currentHash = new Uint8Array(miner.currentHash);
+                }
+    
+                if (difficulty === 0) {
+                    const bus = await fetchBus(client);
+                    difficulty = bus.difficulty;
+                }
+    
+                let resolved = false;
+    
+                async function findByParallel(
+                    workers: any,
+                    currentHash: Uint8Array | null = null,
+                    signerBytes: any,
+                    difficulty: number
+                ) {
+                    nonce = BigInt(nonceBase + (workers.length + 1) * nonceRange);
+                    return new Promise((resolve) => {
+                        for (let i = 0; i < workers.length; i++) {
+                            const worker = workers[i];
+                            worker.postMessage({
+                                startNonce: BigInt(i * nonceRange + 1 + nonceBase),
+                                currentHash,
+                                signerBytes,
+                                difficulty,
+                                jobId,
+                                nonceRange,
+                            });
+                            worker.on('message', (msg: any) => {
+                                if (
+                                    msg.isValid &&
+                                    !resolved &&
+                                    msg.jobId === jobId
+                                ) {
+                                    log(
+                                        `🎉 Found a valid proof! Nonce: ${msg.nonce}`
+                                    );
+                                    resolved = true;
+                                    jobId++;
+                                    for (let j = 0; j < workers.length; j++) {
+                                        workers[j].terminate();
+                                    }
+                                    resolve(msg);
                                 }
-                                resolve(msg);
-                            }
-                            if (msg.requestNewNonce && msg.jobId === jobId) {
-                                nonce += BigInt(nonceRange);
-                                worker.postMessage({
-                                    startNonce: nonce,
-                                    currentHash,
-                                    signerBytes,
-                                    difficulty,
-                                    jobId,
-                                    nonceRange
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-            let { nonce: myNonce }: any = await findByParallel(
-                workers,
-                currentHash,
-                signerBytes,
-                difficulty
-            );
-            // const hash = createHash(currentHash, signerBytes, nonce);
-            // const hashIsValid = validateHash(hash, difficulty);
-            const handleEvent = (ev: MineEvent) => {
-                switch (ev) {
-                    case 'resetting': {
-                        break;
-                    }
-                    case 'retrying': {
-                        break;
-                    }
-                    case 'submitting': {
-                        log('✅ Valid hash found');
-                        log('📡 Submitting transaction');
-                        break;
-                    }
-                    case 'simulating': {
-                        break;
-                    }
+                                if (msg.requestNewNonce && msg.jobId === jobId) {
+                                    nonce += BigInt(nonceRange);
+                                    worker.postMessage({
+                                        startNonce: nonce,
+                                        currentHash,
+                                        signerBytes,
+                                        difficulty,
+                                        jobId,
+                                        nonceRange
+                                    });
+                                }
+                            });
+                        }
+                    });
                 }
-            };
-            const res = await submitProof(
-                wallet,
-                myNonce,
-                client,
-                minerId,
-                handleEvent
-            );
-
-            if (!res) {
-                return;
-            }
-
-            log('🏅 Mining success!');
-            log('🔍 Looking for next hash...');
-            currentHash = null;
-            nonce = BigInt(0);
-            difficulty = 0;
-        })().catch((e) => {
-            console.error(tag, e);
-            return new Promise((r) => setTimeout(() => r(true), 500));
-        });
-    }
-}
-
-export async function waitUntilReset(client: SuiClient) {
-    const bus = await fetchBus(client);
-
-    const threshold = Number(bus.lastReset) + constants.EPOCH_LENGTH;
-
-    if (Date.now() < threshold) {
-        await new Promise((r) =>
-            setTimeout(() => r(true), threshold - Date.now())
-        );
-    }
-}
-
-export async function waitUntilReady(client: SuiClient) {
-  while (true) {
-    const bus = await fetchBus(client);
-
-    if (canBeReset(bus.lastReset)) {
-      await new Promise((r) => setTimeout(() => r(true), 2000));
-    } else {
-      break;
-    }
-  }
-}
-
-export function canBeReset(ts: bigint) {
-  const threshold = Number(ts) + constants.EPOCH_LENGTH;
-
-  return Date.now() >= threshold - 2_000;
-}
-
-export async function execReset(
-    client: SuiClient,
-    wallet: Ed25519Keypair
-): Promise<SuiTransactionBlockResponse | null> {
-  const bus = await fetchBus(client);
-
-  const shared = await getSharedVersion(bus.id, client);
-  const threshold = Number(bus.lastReset) + constants.EPOCH_LENGTH;
-
-  const now = Date.now();
-  if (now >= threshold) {
-        const txb = new TransactionBlock();
-        epochReset(txb, {
-            config: CONFIG,
-            buses: BUSES.map((x) =>
-                txb.sharedObjectRef({
-                    objectId: x,
-                    mutable: true,
-                    initialSharedVersion: shared,
-                })
-            ),
-            clock: SUI_CLOCK_OBJECT_ID,
-        });
-
-        const preSign = await buildTx(txb, client, wallet);
-
-        const dry = await client.dryRunTransactionBlock({
-            transactionBlock: preSign.bytes,
-        });
-
-        if (dry.effects.status.status === 'failure') {
-            const errMsg = dry.effects.status.error;
-            if (errMsg) {
-                if (errMsg.includes(constants.EResetTooEarly.toString())) {
-                    return null;
-                } else {
-                    const contractErr = extractError(dry.effects.status);
-                    throw Error(contractErr ? contractErr : errMsg);
+    
+                let { nonce: myNonce }: any = await findByParallel(
+                    workers,
+                    currentHash,
+                    signerBytes,
+                    difficulty
+                );
+    
+                const handleEvent = (ev: MineEvent) => {
+                    switch (ev) {
+                        case 'resetting': {
+                            break;
+                        }
+                        case 'retrying': {
+                            break;
+                        }
+                        case 'submitting': {
+                            log('✅ Valid hash found');
+                            log('📡 Submitting transaction');
+                            break;
+                        }
+                        case 'simulating': {
+                            break;
+                        }
+                    }
+                };
+    
+                const res = await submitProof(
+                    wallet,
+                    myNonce,
+                    client,
+                    minerId,
+                    handleEvent
+                );
+    
+                if (!res) {
+                    return;
                 }
+    
+                log('🏅 Mining success!');
+                log('🔍 Looking for next hash...');
+                currentHash = null;
+                nonce = BigInt(0);
+                difficulty = 0;
+                nonceBase += nonceRange * workerPoolSize; // Move to the next range
+    
+                // Continue mining while waiting for the transaction to be confirmed
+                setTimeout(async () => {
+                    await waitUntilReady(client);
+                    log('🔄 Resuming mining after transaction confirmation');
+                }, 2000);
+            })().catch((e) => {
+                console.error(tag, e);
+                return new Promise((r) => setTimeout(() => r(true), 500));
+            });
+        }
+    }
+    
+    export async function waitUntilReset(client: SuiClient) {
+        const bus = await fetchBus(client);
+        const threshold = Number(bus.lastReset) + constants.EPOCH_LENGTH;
+        if (Date.now() < threshold) {
+            await new Promise((r) =>
+                setTimeout(() => r(true), threshold - Date.now())
+            );
+        }
+    }
+    
+    export async function waitUntilReady(client: SuiClient) {
+        while (true) {
+            const bus = await fetchBus(client);
+            if (canBeReset(bus.lastReset)) {
+                await new Promise((r) => setTimeout(() => r(true), 2000));
             } else {
-                throw Error('Unknown failure');
+                break;
             }
         }
-
-        const res = await ship(preSign, client, { showObjectChanges: true });
-
+    }
+    
+    export function canBeReset(ts: bigint) {
+        const threshold = Number(ts) + constants.EPOCH_LENGTH;
+        return Date.now() >= threshold - 2_000;
+    }
+    
+    export async function execReset(
+        client: SuiClient,
+        wallet: Ed25519Keypair
+    ): Promise<SuiTransactionBlockResponse | null> {
+        const bus = await fetchBus(client);
+        const shared = await getSharedVersion(bus.id, client);
+        const threshold = Number(bus.lastReset) + constants.EPOCH_LENGTH;
+    
+        const now = Date.now();
+        if (now >= threshold) {
+            const txb = new TransactionBlock();
+            epochReset(txb, {
+                config: CONFIG,
+                buses: BUSES.map((x) =>
+                    txb.sharedObjectRef({
+                        objectId: x,
+                        mutable: true,
+                        initialSharedVersion: shared,
+                    })
+                ),
+                clock: SUI_CLOCK_OBJECT_ID,
+            });
+    
+            const preSign = await buildTx(txb, client, wallet);
+            const dry = await client.dryRunTransactionBlock({
+                transactionBlock: preSign.bytes,
+            });
+    
+            if (dry.effects.status.status === 'failure') {
+                const errMsg = dry.effects.status.error;
+                if (errMsg) {
+                    if (errMsg.includes(constants.EResetTooEarly.toString())) {
+                        return null;
+                    } else {
+                        const contractErr = extractError(dry.effects.status);
+                        throw Error(contractErr ? contractErr : errMsg);
+                    }
+                } else {
+                    throw Error('Unknown failure');
+                }
+            }
+    
+            const res = await ship(preSign, client, { showObjectChanges: true });
+            return res;
+        }
+    
+        return null;
+    }
+    
+    export async function getOrCreateMiner(
+        wallet: Ed25519Keypair,
+        client: SuiClient
+    ): Promise<string> {
+        const pub = wallet.toSuiAddress();
+        const proof = await getProof(client, pub);
+    
+        if (proof) {
+            return proof;
+        }
+    
+        const txb = new TransactionBlock();
+        register(txb);
+    
+        const _res = await launch(txb, client, wallet);
+    
+        const miningAccount = await getProof(client, pub);
+    
+        if (!miningAccount) {
+            throw Error('Miner failed to register');
+        }
+    
+        return miningAccount;
+    }
+    
+    export function extractError(status: ExecutionStatus): string | null {
+        const errMsg = status.error;
+        if (!errMsg) {
+            return null;
+        }
+        const errs = Object.entries(constants);
+        const match = errs.find(([_, code]) => errMsg.includes(code.toString()));
+        return match ? match[0] : null;
+    }
+    
+    export async function getSharedVersion(
+        addr: string,
+        client: SuiClient
+    ): Promise<string> {
+        const configObj = await client.getObject({
+            id: addr,
+            options: { showOwner: true },
+        });
+        const owner = configObj?.data?.owner || null;
+        const shared =
+            // @ts-ignore
+            owner && owner.Shared ? owner.Shared : null;
+        if (!shared) {
+            throw Error('no shared version');
+        }
+        return shared.initial_shared_version;
+    }
+    
+    export async function submitProof(
+        wallet: Ed25519Keypair,
+        nonce: bigint,
+        client: SuiClient,
+        miner: string,
+        logger?: (_val: MineEvent) => void
+    ): Promise<SuiTransactionBlockResponse | null> {
+        const log = (val: MineEvent) => (logger ? logger(val) : null);
+        const { bus, status } = await findBus(client);
+    
+        switch (status) {
+            case BusStatus.MineOk: {
+                break;
+            }
+            case BusStatus.ResetNeeded: {
+                if (roll20()) {
+                    log("resetting");
+                    await execReset(client, wallet);
+                } else {
+                    await waitUntilReady(client);
+                }
+                return null;
+            }
+            case BusStatus.RewardsExhausted: {
+                log('waiting');
+                await waitUntilReady(client);
+                return null;
+            }
+        }
+    
+        const txb = await buildMineTx(
+            nonce,
+            miner,
+            client,
+            bus,
+            wallet.toSuiAddress()
+        );
+    
+        const signedTx = await buildTx(txb, client, wallet);
+    
+        log('simulating');
+        const dryRun = await client.dryRunTransactionBlock({
+            transactionBlock: signedTx.bytes,
+        });
+    
+        // TODO refactor
+        const shouldRetry = await (async () => {
+            if (dryRun.effects.status.status === 'failure') {
+                const contractErr = extractError(dryRun.effects.status);
+                const errMsg = dryRun.effects.status.error || 'missing';
+    
+                if (errMsg.includes(constants.ENeedsReset.toString())) {
+                    log('resetting');
+                    await execReset(client, wallet);
+                    return true;
+                } else if (
+                    errMsg.includes(constants.ERewardsExhausted.toString())
+                ) {
+                    return true;
+                } else if (contractErr) {
+                    throw Error(contractErr);
+                } else {
+                    throw Error('Unknown error');
+                }
+            } else {
+                return false;
+            }
+        })();
+    
+        if (shouldRetry) {
+            log('retrying');
+            return null;
+        }
+    
+        log('submitting');
+        const res = await ship(signedTx, client);
+    
         return res;
     }
-
-    return null;
-}
-
-export async function getOrCreateMiner(
-    wallet: Ed25519Keypair,
-    client: SuiClient
-): Promise<string> {
-    const pub = wallet.toSuiAddress();
-    const proof = await getProof(client, pub);
-
-    if (proof) {
-        return proof;
+    
+    export interface MineConfig {
+        currentHash: Uint8Array;
+        signer: Uint8Array;
+        difficulty: number;
+        initialNonce: bigint;
     }
-
-    const txb = new TransactionBlock();
-    register(txb);
-
-    const _res = await launch(txb, client, wallet);
-
-    const miningAccount = await getProof(client, pub);
-
-    if (!miningAccount) {
-        throw Error('Miner failed to register');
+    
+    export interface MineResult {
+        currentHash: Uint8Array;
+        proof: Uint8Array;
+        nonce: bigint;
     }
-
-    return miningAccount;
-}
-
-export function extractError(status: ExecutionStatus): string | null {
-    const errMsg = status.error;
-    if (!errMsg) {
-        return null;
+    
+    export function formatBig(n: bigint, decimals: number) {
+        return numbro(Number(n) / Math.pow(10, decimals)).format({
+            mantissa: 9,
+            trimMantissa: true,
+        });
     }
-    const errs = Object.entries(constants);
-    const match = errs.find(([_, code]) => errMsg.includes(code.toString()));
-    return match ? match[0] : null;
-}
-
-export async function getSharedVersion(
-    addr: string,
-    client: SuiClient
-): Promise<string> {
-    const configObj = await client.getObject({
-        id: addr,
-        options: { showOwner: true },
-    });
-    const owner = configObj?.data?.owner || null;
-    const shared =
-        // @ts-ignore
-        owner && owner.Shared ? owner.Shared : null;
-    if (!shared) {
-        throw Error('no shared version');
+    
+    export function hexToBytes(hex: string): Uint8Array {
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let c = 0, i = 0; c < hex.length; c += 2, i++)
+            bytes[i] = parseInt(hex.slice(c, c + 2), 16);
+        return bytes;
     }
-    return shared.initial_shared_version;
-}
-
-export async function submitProof(
-    wallet: Ed25519Keypair,
-    nonce: bigint,
-    client: SuiClient,
-    miner: string,
-    logger?: (_val: MineEvent) => void
-): Promise<SuiTransactionBlockResponse | null> {
-    const log = (val: MineEvent) => (logger ? logger(val) : null);
-    const { bus, status } = await findBus(client);
-
-    switch (status) {
-        case BusStatus.MineOk: {
-            break;
-        }
-        case BusStatus.ResetNeeded: {
-          if (roll20()) {
-            log("resetting");
-            await execReset(client, wallet);
-          } else {
-            await waitUntilReady(client);
-          }
-            return null;
-        }
-        case BusStatus.RewardsExhausted: {
-            log('waiting');
-            await waitUntilReady(client);
-            return null;
-        }
-    }
-
-    const txb = await buildMineTx(
-        nonce,
-        miner,
-        client,
-        bus,
-        wallet.toSuiAddress()
-    );
-
-    const signedTx = await buildTx(txb, client, wallet);
-
-    log('simulating');
-    const dryRun = await client.dryRunTransactionBlock({
-        transactionBlock: signedTx.bytes,
-    });
-
-    // TODO refactor
-    const shouldRetry = await (async () => {
-        if (dryRun.effects.status.status === 'failure') {
-            const contractErr = extractError(dryRun.effects.status);
-            const errMsg = dryRun.effects.status.error || 'missing';
-
-            if (errMsg.includes(constants.ENeedsReset.toString())) {
-                log('resetting');
-                await execReset(client, wallet);
-                return true;
-            } else if (
-                errMsg.includes(constants.ERewardsExhausted.toString())
-            ) {
-                return true;
-            } else if (contractErr) {
-                throw Error(contractErr);
-            } else {
-                throw Error('Unknown error');
-            }
-        } else {
-            return false;
-        }
-    })();
-
-    if (shouldRetry) {
-        log('retrying');
-        return null;
-    }
-
-    log('submitting');
-    const res = await ship(signedTx, client);
-
-    return res;
-}
-
-export interface MineConfig {
-    currentHash: Uint8Array;
-    signer: Uint8Array;
-    difficulty: number;
-    initialNonce: bigint;
-}
-
-export interface MineResult {
-    currentHash: Uint8Array;
-    proof: Uint8Array;
-    nonce: bigint;
-}
-
-export function formatBig(n: bigint, decimals: number) {
-    return numbro(Number(n) / Math.pow(10, decimals)).format({
-        mantissa: 9,
-        trimMantissa: true,
-    });
-}
-
-export function hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let c = 0, i = 0; c < hex.length; c += 2, i++)
-      bytes[i] = parseInt(hex.slice(c, c + 2), 16);
-    return bytes;
-  }
+    

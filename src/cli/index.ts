@@ -8,6 +8,11 @@ import {
     getOrCreateMiner,
     fetchBus,
     CONFIG,
+    submitProof,
+    waitUntilReset,
+    waitUntilReady,
+    canBeReset,
+    execReset,
 } from '../common';
 import { Config, MINE } from '../codegen/mineral/mine/structs';
 import { Miner } from '../codegen/mineral/miner/structs';
@@ -123,36 +128,16 @@ program
             console.log('Current difficulty:', bus.difficulty);
         })().catch(console.error)
     );
+
 function getFormattedCurrentTime() {
-    var now = new Date();
-
-    var year = now.getFullYear();
-    var month: any = now.getMonth() + 1; // 注意月份是从0开始的，所以需要加1
-    var day: any = now.getDate();
-    var hour: any = now.getHours();
-    var minute: any = now.getMinutes();
-    var second: any = now.getSeconds();
-
-    // 对于个位数的月份、日期、小时、分钟和秒，前面加上0以保持两位数格式
-    month = month < 10 ? '0' + month : month;
-    day = day < 10 ? '0' + day : day;
-    hour = hour < 10 ? '0' + hour : hour;
-    minute = minute < 10 ? '0' + minute : minute;
-    second = second < 10 ? '0' + second : second;
-
-    var formattedTime =
-        year +
-        '-' +
-        month +
-        '-' +
-        day +
-        ' ' +
-        hour +
-        ':' +
-        minute +
-        ':' +
-        second;
-    return formattedTime;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 console.log(getFormattedCurrentTime());

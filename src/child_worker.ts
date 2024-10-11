@@ -1,5 +1,4 @@
 /* eslint-disable fp/no-loops, fp/no-mutation, fp/no-mutating-methods, fp/no-let, no-constant-condition */
-// import { validateHash, createHash } from './common';
 import { keccak } from 'hash-wasm';
 
 function validateHash(hash: Uint8Array, difficulty: number) {
@@ -33,7 +32,6 @@ async function createHash(
 
 import { isMainThread, parentPort } from 'worker_threads';
 
-//NOTE: 用来判断当前线程是否是主线程
 if (isMainThread) {
     // Main thread code, if any
 } else {
@@ -47,7 +45,7 @@ if (isMainThread) {
             nonceRange,
         } = event;
         let nonce = BigInt(startNonce);
-        let nonceCount = 0; // 全局计数器，用于跟踪处理的nonce数量
+        let nonceCount = 0; // Global counter, used to track the number of nonces processed
 
         while (nonceCount < nonceRange) {
             nonceCount++;
@@ -57,11 +55,11 @@ if (isMainThread) {
             if (isValid) {
                 console.log('Found valid nonce:', nonce, hash, jobId, difficulty);
                 parentPort?.postMessage({ nonce: nonce, isValid, jobId });
-                return; // 结束当前worker的工作
+                return; // Stop the current worker's task
             }
             nonce += BigInt(1);
         }
-        // 完成当前范围，请求新的nonce起始值
+        // Request a new nonce starting value when the current range is complete
         parentPort?.postMessage({
             requestNewNonce: true,
             lastNonce: nonce,
