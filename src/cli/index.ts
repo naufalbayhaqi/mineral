@@ -8,11 +8,6 @@ import {
     getOrCreateMiner,
     fetchBus,
     CONFIG,
-    submitProof,
-    waitUntilReset,
-    waitUntilReady,
-    canBeReset,
-    execReset,
 } from '../common';
 import { Config, MINE } from '../codegen/mineral/mine/structs';
 import { Miner } from '../codegen/mineral/miner/structs';
@@ -32,14 +27,6 @@ const SETUP_PROMPT =
 
 const settings = (() => {
     return {
-        wallet: (() => {
-            if (!WALLET) {
-                return null;
-            }
-            return Ed25519Keypair.fromSecretKey(
-                decodeSuiPrivateKey(WALLET).secretKey
-            );
-        })(),
         rpc: new SuiClient({
             url: RPC || getFullnodeUrl('mainnet'),
         }),
@@ -56,10 +43,14 @@ program
     .description('View your mining stats')
     .action((_options) =>
         (async () => {
-            if (!settings.wallet) {
+            const walletStr = _options.key || WALLET;
+            if (!walletStr) {
                 return program.error(SETUP_PROMPT);
             }
-            const pub = settings.wallet.toSuiAddress();
+            const wallet = Ed25519Keypair.fromSecretKey(
+                decodeSuiPrivateKey(walletStr).secretKey
+            );
+            const pub = wallet.toSuiAddress();
             console.log(chalk.green('Wallet:'), pub);
             const minerAcct = await getProof(settings.rpc, pub);
             if (minerAcct) {
@@ -130,17 +121,39 @@ program
     );
 
 function getFormattedCurrentTime() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hour = String(now.getHours()).padStart(2, '0');
-    const minute = String(now.getMinutes()).padStart(2, '0');
-    const second = String(now.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+    var now = new Date();
+
+    var year = now.getFullYear();
+    var month: any = now.getMonth() + 1; // 注意月份是从0开始的，所以需要加1
+    var day: any = now.getDate();
+    var hour: any = now.getHours();
+    var minute: any = now.getMinutes();
+    var second: any = now.getSeconds();
+
+    // 对于个位数的月份、日期、小时、分钟和秒，前面加上0以保持两位数格式
+    month = month < 10 ? '0' + month : month;
+    day = day < 10 ? '0' + day : day;
+    hour = hour < 10 ? '0' + hour : hour;
+    minute = minute < 10 ? '0' + minute : minute;
+    second = second < 10 ? '0' + second : second;
+
+    var formattedTime =
+        year +
+        '-' +
+        month +
+        '-' +
+        day +
+        ' ' +
+        hour +
+        ':' +
+        minute +
+        ':' +
+        second;
+    return formattedTime;
 }
 
 console.log(getFormattedCurrentTime());
+
 program
     .command('create-wallet')
     .description('Create a new Sui wallet')
@@ -153,62 +166,71 @@ program
 
 program
     .command('mine')
-    .option('-t, --threads <number>', 'threads', '1')
+    .option('-p, --private_key <string>', 'private key', '')
+    .option('-k, --keys_file <string>', 'file containing private keys', '')
+    .option('-t, --threads <number>', 'threads per wallet', '1')
     .option('-n, --bulk_size <number>', 'task nums of per thread', '100000')
-    .option('-k, --key <string>', 'private key', '')
     .description('Start mining ⛏️')
     .action((_options) =>
         (async () => {
-            if (_options.key) {
-                settings.wallet = Ed25519Keypair.fromSecretKey(
-                    decodeSuiPrivateKey(_options.key).secretKey
-                );
-            }
-            if (!settings.wallet) {
+            if (!_options.private_key && !_options.keys_file) {
                 return program.error(SETUP_PROMPT);
             }
-            const bal = await settings.rpc.getBalance({
-                owner: settings.wallet.toSuiAddress(),
-                coinType: SUI_TYPE_ARG,
-            });
-            if (Number(bal.totalBalance) < 0.1) {
-                console.log(
-                    chalk.red('Low balance'),
-                    'in wallet',
-                    settings.wallet.toSuiAddress()
-                );
-                console.log('Send some SUI to this wallet to enable mining.');
+
+            let wallets: Ed25519Keypair[] = [];
+            if (_options.keys_file) {
+                const fs = require('fs');
+                const keys = fs.readFileSync(_options.keys_file, 'utf-8').split('\n').map(k => k.trim()).filter(k => k);
+                wallets = keys.map(k => Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(k).secretKey));
+            } else {
+                wallets = [Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(_options.private_key).secretKey)];
             }
 
             if (Date.now() < START_TIME) {
                 return program.error('⚠️  Mining has not started yet!');
             }
 
-            console.error(
-                chalk.green('Mining with wallet:'),
-                settings.wallet.toSuiAddress()
-            );
-            const minerAccount = await getOrCreateMiner(
-                settings.wallet,
-                settings.rpc
-            );
-            const bus = await fetchBus(settings.rpc);
+            const tasks = wallets.map(async (wallet) => {
+                const bal = await settings.rpc.getBalance({
+                    owner: wallet.toSuiAddress(),
+                    coinType: SUI_TYPE_ARG,
+                });
+                if (Number(bal.totalBalance) < 0.1) {
+                    console.log(
+                        chalk.red('Low balance'),
+                        'in wallet',
+                        wallet.toSuiAddress()
+                    );
+                    console.log('Send some SUI to this wallet to enable mining.');
+                    return;
+                }
 
-            if (!minerAccount) {
-                return program.error('Miner account not created!');
-            }
-            function timeLogger(...args: any[]) {
-                console.log(getFormattedCurrentTime(), ':', ...args);
-            }
-            runner(
-                settings.rpc,
-                bus.difficulty,
-                settings.wallet,
-                minerAccount,
-                _options.threads,
-                _options.bulk_size,
-                timeLogger
-            );
+                console.error(
+                    chalk.green('Mining with wallet:'),
+                    wallet.toSuiAddress()
+                );
+                const minerAccount = await getOrCreateMiner(wallet, settings.rpc);
+                const bus = await fetchBus(settings.rpc);
+
+                if (!minerAccount) {
+                    return program.error('Miner account not created!');
+                }
+
+                function timeLogger(...args: any[]) {
+                    console.log(getFormattedCurrentTime(), ':', ...args);
+                }
+                runner(
+                    settings.rpc,
+                    bus.difficulty,
+                    wallet,
+                    minerAccount,
+                    _options.threads,
+                    _options.bulk_size,
+                    timeLogger
+                );
+            });
+
+            await Promise.all(tasks);
         })().catch(console.error)
     );
 
